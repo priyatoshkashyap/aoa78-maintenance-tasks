@@ -1,0 +1,6 @@
+firebase-admin
+pandas
+openpyxl
+pytz
+python-dotenv
+requests
