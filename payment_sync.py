@@ -13,7 +13,10 @@ from firebase_admin import credentials, firestore
 
 
 def load_payment_cache(filepath: str) -> dict:
-    """Load existing payment cache from JSON file."""
+    """Load existing payment cache from JSON file. Returns empty dict if file doesn't exist."""
+    if not os.path.exists(filepath):
+        print(f"Info: Payment cache file '{filepath}' not found. Starting with empty cache.")
+        return {}
     with open(filepath) as f:
         return json.load(f)
 

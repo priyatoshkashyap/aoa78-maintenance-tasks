@@ -11,7 +11,10 @@ from firebase_admin import firestore
 
 
 def load_payment_details(filepath: str) -> dict:
-    """Load payment details from JSON file."""
+    """Load payment details from JSON file. Returns empty dict if file doesn't exist."""
+    if not os.path.exists(filepath):
+        print(f"Warning: Payment details file '{filepath}' not found. Balance information will be empty.")
+        return {}
     with open(filepath) as f:
         return json.load(f)
 
