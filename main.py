@@ -4,6 +4,7 @@ Syncs Excel financial data with Firestore and generates HTML reports.
 """
 
 import os
+import argparse
 import pathlib
 import pytz
 from datetime import datetime, date, timedelta
@@ -12,11 +13,12 @@ from dotenv import load_dotenv
 from payment_sync import sync_payments_from_excel, initialize_firebase
 from report_generator import generate_current_requests_report, generate_aggregated_stats
 from email_client import get_email_client
+from request_cleanup import cleanup_old_requests
 
 # Load environment variables from .env file
 load_dotenv()
 
-# Configuration from environment
+# Configuration from environment (can't be CLI arguments due to sensitivity or variability)
 EXCEL_FILE_PATH = os.getenv("EXCEL_FILE_PATH", r"C:/Users/P2/Desktop/RWA78_OS_25_26.xlsx")
 FIREBASE_CREDENTIALS_PATH = os.getenv("FIREBASE_CREDENTIALS_PATH", "./aoa78-service-requests-firebase-adminsdk-9of97-708fbd4bc6.json")
 PAYMENT_DETAILS_JSON = os.getenv("PAYMENT_DETAILS_JSON", "address_payment_details.json")
@@ -24,17 +26,65 @@ EMAIL_TO = os.getenv("EMAIL_TO", "priyatosh.kashyap@gmail.com")
 TIMEZONE_DEFAULT = os.getenv("TIMEZONE_DEFAULT", "UTC")
 REPORT_TIMEZONE = os.getenv("REPORT_TIMEZONE", "Asia/Kolkata")
 
+
+def parse_arguments():
+    """Parse command-line arguments for feature flags."""
+    parser = argparse.ArgumentParser(
+        description="AOA78 Service Requests and Payments Management System"
+    )
+    parser.add_argument(
+        "--sync-payments",
+        action="store_true",
+        help="Sync Excel payment data to Firestore"
+    )
+    parser.add_argument(
+        "--cleanup-old-requests",
+        action="store_true",
+        help="Remove requests older than threshold from lastUpdatedAt"
+    )
+    parser.add_argument(
+        "--cleanup-months",
+        type=int,
+        default=12,
+        help="Age threshold in months for cleanup (default: 12)"
+    )
+    parser.add_argument(
+        "--generate-pending-approval",
+        action="store_true",
+        help="Generate and email pending approval requests report"
+    )
+    parser.add_argument(
+        "--generate-in-progress",
+        action="store_true",
+        help="Generate and email in-progress requests report"
+    )
+    parser.add_argument(
+        "--generate-monthly-stats",
+        action="store_true",
+        help="Generate and email monthly aggregated stats report"
+    )
+    parser.add_argument(
+        "--generate-quarterly-stats",
+        action="store_true",
+        help="Generate and email quarterly aggregated stats report"
+    )
+    return parser.parse_args()
+
+
 # Get today's date formatted
 today = datetime.now().replace(tzinfo=pytz.timezone(TIMEZONE_DEFAULT)).astimezone(pytz.timezone(REPORT_TIMEZONE)).strftime("%Y-%m-%d")
 
 
 def main():
     """Main entry point."""
+    # Parse command-line arguments
+    args = parse_arguments()
+
     # Initialize Firebase
     db = initialize_firebase(FIREBASE_CREDENTIALS_PATH)
 
-    # Sync payments from Excel (controlled by SYNC_PAYMENTS flag)
-    if os.getenv("SYNC_PAYMENTS", "0") == "1":
+    # Sync payments from Excel (controlled by --sync-payments flag)
+    if args.sync_payments:
         file_path = pathlib.Path(EXCEL_FILE_PATH)
         modification_timestamp = file_path.stat().st_mtime
         modification_time = datetime.fromtimestamp(modification_timestamp)
@@ -50,14 +100,18 @@ def main():
     else:
         modification_time = datetime.now().strftime("%Y-%m-%d")
 
+    # Cleanup old requests (controlled by --cleanup-old-requests flag)
+    if args.cleanup_old_requests:
+        cleanup_old_requests(db, args.cleanup_months)
+
     # Generate Pending Approval report
-    if os.getenv("GENERATE_PENDING_APPROVAL_REPORT", "0") == "1":
+    if args.generate_pending_approval:
         with open("open_requests.html", 'w') as f:
             f.write(f"Open Requests Report for - <b>{today}</b><br/><br/>\n")
 
         generate_current_requests_report(db, 'Pending Approval', modification_time, "open_requests.html")
 
-        email_client = get_email_client("sendgrid")
+        email_client = get_email_client("mailjet")
         email_client.send_email(
             to_email=EMAIL_TO,
             subject=f'"AOA78 - Pending Approval Requests - {today}"',
@@ -65,7 +119,7 @@ def main():
         )
 
     # Generate In Progress report
-    if os.getenv("GENERATE_IN_PROGRESS_REPORT", "0") == "1":
+    if args.generate_in_progress:
         with open("open_requests.html", 'a') as f:
             f.write(f"<br/><br/>In Progress Requests Report for - <b>{today}</b><br/><br/>\n")
 
@@ -79,7 +133,7 @@ def main():
         )
 
     # Generate Monthly Stats report
-    if os.getenv("GENERATE_MONTHLY_STATS_REPORT", "0") == "1":
+    if args.generate_monthly_stats:
         first_day_of_month = date.today().replace(day=1)
 
         with open("request_stats.html", 'w') as f:
@@ -96,7 +150,7 @@ def main():
         )
 
     # Generate Quarterly Stats report
-    if os.getenv("GENERATE_QUARTERLY_STATS_REPORT", "0") == "1":
+    if args.generate_quarterly_stats:
         few_days_back = date.today() - timedelta(days=15)
         first_day_of_month = few_days_back.replace(day=1)
 

@@ -3,6 +3,7 @@ Payment synchronization module.
 Syncs Excel financial data with Firestore and maintains JSON cache.
 """
 
+import os
 import json
 import pandas as pd
 from datetime import datetime
