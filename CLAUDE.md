@@ -53,7 +53,7 @@ python main.py --sync-payments --cleanup-old-requests --generate-pending-approva
 - `main.py` - Main entry point, orchestrates payment sync, cleanup, and report generation
 - `payment_sync.py` - Syncs Excel payment data to Firestore, maintains JSON cache
 - `report_generator.py` - Generates HTML reports (current requests, aggregated stats, SLA analysis)
-- `email_client.py` - Pluggable email client interface (currently SendGrid only)
+- `email_client.py` - Pluggable email client interface (SendGrid, Mailjet, Gmail SMTP)
 - `request_cleanup.py` - Removes old service request records from Firestore based on age
 
 ### Data Flow
@@ -70,8 +70,10 @@ python main.py --sync-payments --cleanup-old-requests --generate-pending-approva
 **Environment variables** (via `.env` file):
 - `FIREBASE_CREDENTIALS_PATH` - Service account JSON path (required)
 - `EXCEL_FILE_PATH` - Finance data source path (required for sync)
+- `EMAIL_PROVIDER` - Email provider to use: `sendgrid`, `mailjet`, or `gmail` (default: `mailjet`)
 - `SENDGRID_API_KEY` - SendGrid API key (required for SendGrid emails)
 - `MAILJET_API_KEY` / `MAILJET_SECRET_KEY` - Mailjet credentials (required for Mailjet emails)
+- `GMAIL_APP_PASSWORD` - Gmail app password (required for Gmail SMTP emails)
 - `EMAIL_FROM` / `EMAIL_FROM_NAME` - Sender email and name
 - `EMAIL_TO` - Recipient email address
 - `TIMEZONE_DEFAULT` / `REPORT_TIMEZONE` - Timezone settings

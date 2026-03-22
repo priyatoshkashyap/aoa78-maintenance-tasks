@@ -6,13 +6,18 @@ from abc import ABC, abstractmethod
 import os
 import base64
 import requests
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from email.utils import formataddr
 
 
 class EmailClient(ABC):
     """Abstract base class for email clients."""
 
     @abstractmethod
-    def send_email(self, to_email: str, subject: str, html_content: str, to_name: str = None) -> None:
+    def send_email(self, to_email: str, subject: str, html_content: str, to_name: str = None,
+                   text_content: str = None, headers: dict = None) -> None:
         """Send an email with HTML content."""
         pass
 
@@ -30,7 +35,8 @@ class SendGridClient(EmailClient):
             "Content-Type": "application/json"
         }
 
-    def send_email(self, to_email: str, subject: str, html_content: str, to_name: str = None) -> None:
+    def send_email(self, to_email: str, subject: str, html_content: str, to_name: str = None,
+                   text_content: str = None, headers: dict = None) -> None:
         """Send an email via SendGrid API."""
         payload = {
             "personalizations": [{"to": [{"email": to_email, "name": to_name or ""}]}],
@@ -38,6 +44,10 @@ class SendGridClient(EmailClient):
             "subject": subject,
             "content": [{"type": "text/html", "value": html_content}]
         }
+
+        # Add custom headers if provided
+        if headers:
+            payload["headers"] = headers
 
         response = requests.post(
             self.url,
@@ -108,12 +118,74 @@ class MailjetClient(EmailClient):
         response.raise_for_status()
 
 
+class GmailSMTPClient(EmailClient):
+    """Gmail SMTP implementation using app password authentication."""
+
+    def __init__(self, app_password: str, from_email: str, from_name: str = None):
+        """
+        Initialize Gmail SMTP client.
+
+        Args:
+            app_password: Gmail app password (16-character password from Google)
+            from_email: Sender email address (must be a Gmail address)
+            from_name: Sender name (optional)
+        """
+        self.app_password = app_password
+        self.from_email = from_email
+        self.from_name = from_name or from_email
+        self.smtp_server = "smtp.gmail.com"
+        self.smtp_port = 587
+
+    def send_email(self, to_email: str, subject: str, html_content: str, to_name: str = None,
+                   text_content: str = None, headers: dict = None) -> None:
+        """
+        Send an email via Gmail SMTP.
+
+        Args:
+            to_email: Recipient email address
+            subject: Email subject
+            html_content: HTML body content
+            to_name: Recipient name (optional)
+            text_content: Plain text alternative (optional)
+            headers: Additional headers dict (optional, e.g., {"List-Unsubscribe": "<mailto:...>"})
+        """
+        # Create multipart message
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = subject
+        msg['From'] = formataddr((self.from_name, self.from_email))
+        msg['To'] = formataddr((to_name or "", to_email))
+
+        # Add custom headers (e.g., List-Unsubscribe)
+        if headers:
+            for key, value in headers.items():
+                msg[key] = value
+
+        # Create plain text version if not provided
+        if text_content is None:
+            text_content = f"Please view this email in an HTML-capable client to see the full content: {subject}"
+
+        # Attach both plain text and HTML versions
+        part1 = MIMEText(text_content, 'plain')
+        part2 = MIMEText(html_content, 'html')
+        msg.attach(part1)
+        msg.attach(part2)
+
+        # Send email via SMTP
+        try:
+            with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
+                server.starttls()
+                server.login(self.from_email, self.app_password)
+                server.send_message(msg)
+        except Exception as e:
+            raise RuntimeError(f"Failed to send email via Gmail SMTP: {str(e)}")
+
+
 def get_email_client(provider: str = "sendgrid") -> EmailClient:
     """
     Factory function to get an email client instance.
 
     Args:
-        provider: Email provider name (e.g., "sendgrid", "mailjet")
+        provider: Email provider name (e.g., "sendgrid", "mailjet", "gmail")
 
     Returns:
         EmailClient instance for the specified provider
@@ -121,13 +193,14 @@ def get_email_client(provider: str = "sendgrid") -> EmailClient:
     clients = {
         "sendgrid": SendGridClient,
         "mailjet": MailjetClient,
+        "gmail": GmailSMTPClient,
     }
 
     if provider not in clients:
         raise ValueError(f"Unknown email provider: {provider}. Available: {list(clients.keys())}")
 
-    from_email = os.getenv("EMAIL_FROM", "rwa.munirka@gmail.com")
-    from_name = os.getenv("EMAIL_FROM_NAME", "RWA Munirka - AOA78")
+    from_email = os.getenv("EMAIL_FROM")
+    from_name = os.getenv("EMAIL_FROM_NAME")
 
     if provider == "mailjet":
         api_key = os.getenv("MAILJET_API_KEY")
@@ -148,6 +221,30 @@ def get_email_client(provider: str = "sendgrid") -> EmailClient:
         return clients[provider](
             api_key=api_key,
             secret_key=secret_key,
+            from_email=from_email,
+            from_name=from_name
+        )
+    elif provider == "gmail":
+        app_password = os.getenv("GMAIL_APP_PASSWORD")
+        if not app_password:
+            raise ValueError(
+                f"Gmail app password not found in environment. "
+                f"Set GMAIL_APP_PASSWORD environment variable."
+            )
+        if len(app_password) < 16:
+            raise ValueError(
+                f"Gmail app password appears too short. "
+                f"App passwords are typically 16 characters. "
+                f"Length: {len(app_password)}"
+            )
+        # Validate from_email is a Gmail address
+        if not from_email.endswith('@gmail.com'):
+            raise ValueError(
+                f"Gmail provider requires a Gmail address. "
+                f"EMAIL_FROM ({from_email}) must end with @gmail.com"
+            )
+        return clients[provider](
+            app_password=app_password,
             from_email=from_email,
             from_name=from_name
         )

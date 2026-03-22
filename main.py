@@ -27,8 +27,8 @@ EMAIL_FROM = os.getenv("EMAIL_FROM")
 TIMEZONE_DEFAULT = os.getenv("TIMEZONE_DEFAULT", "UTC")
 REPORT_TIMEZONE = os.getenv("REPORT_TIMEZONE", "Asia/Kolkata")
 
-# Email provider constant - change this to use a different provider for all emails
-EMAIL_PROVIDER = "mailjet"
+# Email provider - configurable via environment variable (sendgrid, mailjet, or gmail)
+EMAIL_PROVIDER = os.getenv("EMAIL_PROVIDER", "gmail")
 
 
 def wrap_email_html(content: str, title: str) -> str:
