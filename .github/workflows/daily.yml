@@ -1,0 +1,72 @@
+name: Daily AOA78 Sync
+
+on:
+  schedule:
+    # Runs daily at 6:00 AM UTC (11:30 AM IST)
+    # Cron format: minute hour day month weekday
+    - cron: '0 6 * * *'
+  # Optional: allow manual trigger from GitHub interface
+  workflow_dispatch:
+
+jobs:
+  run-aoa78:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Checkout code
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Step 2: Set up Python
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # Step 3: Install dependencies
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # Step 4: Create Firebase credentials file from secret
+      - name: Create Firebase credentials file
+        run: |
+          cat << 'EOF' > aoa78-service-requests-firebase-adminsdk-9of97-708fbd4bc6.json
+          ${{ secrets.FIREBASE_CREDENTIALS_JSON }}
+          EOF
+
+      # Step 5: Create .env file from secrets
+      - name: Create .env file
+        run: |
+          cat << 'EOF' > .env
+          FIREBASE_CREDENTIALS_PATH=./aoa78-service-requests-firebase-adminsdk-9of97-708fbd4bc6.json
+          EXCEL_FILE_PATH=${{ secrets.EXCEL_FILE_PATH }}
+          SENDGRID_API_KEY=${{ secrets.SENDGRID_API_KEY }}
+          EMAIL_FROM=${{ secrets.EMAIL_FROM }}
+          EMAIL_FROM_NAME=${{ secrets.EMAIL_FROM_NAME }}
+          GMAIL_APP_PASSWORD=${{ secrets.GMAIL_APP_PASSWORD }}
+          MAILJET_API_KEY=${{ secrets.MAILJET_API_KEY }}
+          MAILJET_SECRET_KEY=${{ secrets.MAILJET_SECRET_KEY }}
+          EMAIL_TO=${{ secrets.EMAIL_TO }}
+          TIMEZONE_DEFAULT=${{ secrets.TIMEZONE_DEFAULT }}
+          REPORT_TIMEZONE=${{ secrets.REPORT_TIMEZONE }}
+          EMAIL_PROVIDER=${{ secrets.EMAIL_PROVIDER }}
+          PAYMENT_DETAILS_JSON=address_payment_details.json
+          EOF
+
+      # Step 6: Run the script with desired arguments
+      - name: Run AOA78 script
+        run: |
+          python main.py --generate-pending-approval --generate-in-progress
+
+      # Step 7: Upload logs/artifacts (optional)
+      - name: Upload HTML reports
+        if: always()  # Always upload even if script fails
+        uses: actions/upload-artifact@v4
+        with:
+          name: reports-${{ github.run_number }}
+          path: |
+            *.html
+            address_payment_details.json
+          retention-days: 7
