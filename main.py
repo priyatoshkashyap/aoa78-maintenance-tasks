@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 
 from payment_sync import sync_payments_from_excel, initialize_firebase
 from report_generator import generate_current_requests_report, generate_aggregated_stats
-from email_client import get_email_client
+from email_client import get_email_client, EmailClient
 from request_cleanup import cleanup_old_requests
 
 # Load environment variables from .env file
@@ -25,6 +25,9 @@ PAYMENT_DETAILS_JSON = os.getenv("PAYMENT_DETAILS_JSON", "address_payment_detail
 EMAIL_TO = os.getenv("EMAIL_TO", "priyatosh.kashyap@gmail.com")
 TIMEZONE_DEFAULT = os.getenv("TIMEZONE_DEFAULT", "UTC")
 REPORT_TIMEZONE = os.getenv("REPORT_TIMEZONE", "Asia/Kolkata")
+
+# Email provider constant - change this to use a different provider for all emails
+EMAIL_PROVIDER = "mailjet"
 
 
 def parse_arguments():
@@ -104,31 +107,27 @@ def main():
     if args.cleanup_old_requests:
         cleanup_old_requests(db, args.cleanup_months)
 
-    # Generate Pending Approval report
-    if args.generate_pending_approval:
+    # Generate Open Requests (Pending + In Progress) - combined into one email
+    if args.generate_pending_approval or args.generate_in_progress:
+        # Start fresh with open_requests.html
         with open("open_requests.html", 'w') as f:
             f.write(f"Open Requests Report for - <b>{today}</b><br/><br/>\n")
 
-        generate_current_requests_report(db, 'Pending Approval', modification_time, "open_requests.html")
+        # Generate Pending Approval if requested
+        if args.generate_pending_approval:
+            generate_current_requests_report(db, 'Pending Approval', modification_time, "open_requests.html")
 
-        email_client = get_email_client("mailjet")
+        # Add separator and generate In Progress if requested
+        if args.generate_in_progress:
+            with open("open_requests.html", 'a') as f:
+                f.write(f"<br/><br/>In Progress Requests Report for - <b>{today}</b><br/><br/>\n")
+            generate_current_requests_report(db, 'In Progress', modification_time, "open_requests.html")
+
+        # Send single consolidated email
+        email_client = get_email_client(EMAIL_PROVIDER)
         email_client.send_email(
             to_email=EMAIL_TO,
-            subject=f'"AOA78 - Pending Approval Requests - {today}"',
-            html_content=open("open_requests.html").read()
-        )
-
-    # Generate In Progress report
-    if args.generate_in_progress:
-        with open("open_requests.html", 'a') as f:
-            f.write(f"<br/><br/>In Progress Requests Report for - <b>{today}</b><br/><br/>\n")
-
-        generate_current_requests_report(db, 'In Progress', modification_time, "open_requests.html")
-
-        email_client = get_email_client("sendgrid")
-        email_client.send_email(
-            to_email=EMAIL_TO,
-            subject=f'"AOA78 - In Progress Requests - {today}"',
+            subject=f'"AOA78 - Open Requests Report - {today}"',
             html_content=open("open_requests.html").read()
         )
 
@@ -142,7 +141,7 @@ def main():
         dt = datetime.combine(first_day_of_month, datetime.min.time())
         generate_aggregated_stats(db, dt, modification_time, "request_stats.html")
 
-        email_client = get_email_client("sendgrid")
+        email_client = get_email_client(EMAIL_PROVIDER)
         email_client.send_email(
             to_email=EMAIL_TO,
             subject=f'"AOA78 - Monthly Stats Report - {first_day_of_month.strftime("%Y-%m-%d")}"',
@@ -169,7 +168,7 @@ def main():
         dt = datetime.combine(first_day_of_quarter, datetime.min.time())
         generate_aggregated_stats(db, dt, modification_time, "request_stats.html")
 
-        email_client = get_email_client("sendgrid")
+        email_client = get_email_client(EMAIL_PROVIDER)
         email_client.send_email(
             to_email=EMAIL_TO,
             subject=f'"AOA78 - Quarterly Stats Report - {first_day_of_month.strftime("%Y-%m-%d")}"',
