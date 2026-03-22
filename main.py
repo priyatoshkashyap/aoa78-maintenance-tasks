@@ -22,12 +22,57 @@ load_dotenv()
 EXCEL_FILE_PATH = os.getenv("EXCEL_FILE_PATH", r"C:/Users/P2/Desktop/RWA78_OS_25_26.xlsx")
 FIREBASE_CREDENTIALS_PATH = os.getenv("FIREBASE_CREDENTIALS_PATH", "./aoa78-service-requests-firebase-adminsdk-9of97-708fbd4bc6.json")
 PAYMENT_DETAILS_JSON = os.getenv("PAYMENT_DETAILS_JSON", "address_payment_details.json")
-EMAIL_TO = os.getenv("EMAIL_TO", "priyatosh.kashyap@gmail.com")
+EMAIL_TO = os.getenv("EMAIL_TO")
+EMAIL_FROM = os.getenv("EMAIL_FROM")
 TIMEZONE_DEFAULT = os.getenv("TIMEZONE_DEFAULT", "UTC")
 REPORT_TIMEZONE = os.getenv("REPORT_TIMEZONE", "Asia/Kolkata")
 
 # Email provider constant - change this to use a different provider for all emails
 EMAIL_PROVIDER = "mailjet"
+
+
+def wrap_email_html(content: str, title: str) -> str:
+    """
+    Wrap HTML report content in a proper email structure with styling and footer.
+
+    Args:
+        content: The HTML report content (from report generator)
+        title: Email title/subject for the HTML <title> tag
+
+    Returns:
+        Complete HTML email with styling, meta tags, and unsubscribe footer
+    """
+    return f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{title}</title>
+    <style>
+        body {{ font-family: Arial, sans-serif; margin: 20px; line-height: 1.6; color: #333; }}
+        table {{ border-collapse: collapse; width: 100%; margin: 20px 0; }}
+        th, td {{ padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }}
+        th {{ background-color: #4CAF50; color: white; }}
+        tr:hover {{ background-color: #f5f5f5; }}
+        a {{ color: #2196F3; text-decoration: none; }}
+        a:hover {{ text-decoration: underline; }}
+        hr {{ border: 0; border-top: 1px solid #eee; margin: 30px 0; }}
+        .footer {{ font-size: 12px; color: #666; margin-top: 20px; }}
+        .unsubscribe {{ color: #666; font-size: 11px; }}
+    </style>
+</head>
+<body>
+{content}
+<hr>
+<div class="footer">
+    <p>This is an automated report from AOA78 Management System.</p>
+    <p>If you believe you received this in error, please contact the administrator.</p>
+    <p class="unsubscribe">
+        To unsubscribe from these emails, reply with "UNSUBSCRIBE" in the subject line.
+    </p>
+</div>
+</body>
+</html>"""
 
 
 def parse_arguments():
@@ -124,11 +169,18 @@ def main():
             generate_current_requests_report(db, 'In Progress', modification_time, "open_requests.html")
 
         # Send single consolidated email
+        raw_html = open("open_requests.html").read()
+        email_html = wrap_email_html(raw_html, f"AOA78 - Open Requests Report - {today}")
+        text_content = f"AOA78 Open Requests Report for {today}\n\nThis is an automated email. Please view the HTML version for the full report with tables and formatting."
+        unsubscribe_header = {"List-Unsubscribe": f"<mailto:{EMAIL_FROM}?subject=unsubscribe>"}
+
         email_client = get_email_client(EMAIL_PROVIDER)
         email_client.send_email(
             to_email=EMAIL_TO,
-            subject=f'"AOA78 - Open Requests Report - {today}"',
-            html_content=open("open_requests.html").read()
+            subject=f"AOA78 - Open Requests Report - {today}",
+            html_content=email_html,
+            text_content=text_content,
+            headers=unsubscribe_header
         )
 
     # Generate Monthly Stats report
@@ -141,11 +193,19 @@ def main():
         dt = datetime.combine(first_day_of_month, datetime.min.time())
         generate_aggregated_stats(db, dt, modification_time, "request_stats.html")
 
+        raw_html = open("request_stats.html").read()
+        report_date = first_day_of_month.strftime("%Y-%m-%d")
+        email_html = wrap_email_html(raw_html, f"AOA78 - Monthly Stats Report - {report_date}")
+        text_content = f"AOA78 Monthly Stats Report for {report_date}\n\nThis is an automated email. Please view the HTML version for the full report with tables and formatting."
+        unsubscribe_header = {"List-Unsubscribe": f"<mailto:{EMAIL_FROM}?subject=unsubscribe>"}
+
         email_client = get_email_client(EMAIL_PROVIDER)
         email_client.send_email(
             to_email=EMAIL_TO,
-            subject=f'"AOA78 - Monthly Stats Report - {first_day_of_month.strftime("%Y-%m-%d")}"',
-            html_content=open("request_stats.html").read()
+            subject=f"AOA78 - Monthly Stats Report - {report_date}",
+            html_content=email_html,
+            text_content=text_content,
+            headers=unsubscribe_header
         )
 
     # Generate Quarterly Stats report
@@ -168,11 +228,19 @@ def main():
         dt = datetime.combine(first_day_of_quarter, datetime.min.time())
         generate_aggregated_stats(db, dt, modification_time, "request_stats.html")
 
+        raw_html = open("request_stats.html").read()
+        report_date = first_day_of_month.strftime("%Y-%m-%d")
+        email_html = wrap_email_html(raw_html, f"AOA78 - Quarterly Stats Report - {report_date}")
+        text_content = f"AOA78 Quarterly Stats Report for {report_date}\n\nThis is an automated email. Please view the HTML version for the full report with tables and formatting."
+        unsubscribe_header = {"List-Unsubscribe": f"<mailto:{EMAIL_FROM}?subject=unsubscribe>"}
+
         email_client = get_email_client(EMAIL_PROVIDER)
         email_client.send_email(
             to_email=EMAIL_TO,
-            subject=f'"AOA78 - Quarterly Stats Report - {first_day_of_month.strftime("%Y-%m-%d")}"',
-            html_content=open("request_stats.html").read()
+            subject=f"AOA78 - Quarterly Stats Report - {report_date}",
+            html_content=email_html,
+            text_content=text_content,
+            headers=unsubscribe_header
         )
 
 

@@ -65,8 +65,19 @@ class MailjetClient(EmailClient):
             "Content-Type": "application/json"
         }
 
-    def send_email(self, to_email: str, subject: str, html_content: str, to_name: str = None) -> None:
-        """Send an email via Mailjet API."""
+    def send_email(self, to_email: str, subject: str, html_content: str, to_name: str = None,
+                   text_content: str = None, headers: dict = None) -> None:
+        """
+        Send an email via Mailjet API.
+
+        Args:
+            to_email: Recipient email address
+            subject: Email subject
+            html_content: HTML body content
+            to_name: Recipient name (optional)
+            text_content: Plain text alternative (optional, defaults to generic message)
+            headers: Additional headers dict (optional, e.g., {"List-Unsubscribe": "<mailto:...>"})
+        """
         payload = {
             "FromEmail": self.from_email,
             "FromName": self.from_name,
@@ -74,9 +85,18 @@ class MailjetClient(EmailClient):
                 {"Email": to_email, "Name": to_name or "Recipient"}
             ],
             "Subject": subject,
-            "Text-part": f"Please see the attached message: {subject}",
-            "Html-part": html_content
+            "Html-part": html_content,
         }
+
+        # Add plain text part
+        if text_content is not None:
+            payload["Text-part"] = text_content
+        else:
+            payload["Text-part"] = f"Please see the attached message: {subject}"
+
+        # Add custom headers (e.g., List-Unsubscribe)
+        if headers:
+            payload["Headers"] = headers
 
         response = requests.post(
             self.url,
@@ -112,6 +132,19 @@ def get_email_client(provider: str = "sendgrid") -> EmailClient:
     if provider == "mailjet":
         api_key = os.getenv("MAILJET_API_KEY")
         secret_key = os.getenv("MAILJET_SECRET_KEY")
+        # Debug: Check if credentials are loaded
+        if not api_key or not secret_key:
+            raise ValueError(
+                f"Mailjet credentials not found in environment. "
+                f"MAILJET_API_KEY: {'SET' if api_key else 'MISSING'}, "
+                f"MAILJET_SECRET_KEY: {'SET' if secret_key else 'MISSING'}"
+            )
+        if len(api_key) < 10 or len(secret_key) < 10:
+            raise ValueError(
+                f"Mailjet credentials appear truncated. "
+                f"API key length: {len(api_key) if api_key else 0}, "
+                f"Secret key length: {len(secret_key) if secret_key else 0}"
+            )
         return clients[provider](
             api_key=api_key,
             secret_key=secret_key,
