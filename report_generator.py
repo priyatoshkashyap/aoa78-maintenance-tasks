@@ -41,7 +41,7 @@ def generate_current_requests_report(db, status: str, file_mod_time: str, output
         f.write(f" ---------------------------------------- <a href='{link}'>{status:<10} Requests</a> ----------------------------------------\n")
         f.write("<table style='border-spacing: 30px 0px'>"
                 "<tr><th>Address</th><th>Name</th><th>Mobile No.</th><th>Service</th>"
-                "<th>Raised On</th><th>Last Updated</th>"
+                "<th>Original Message</th><th>Raised On</th><th>Last Updated</th>"
                 f"<th>Balance Due (as at - {file_mod_time})</th></tr>\n")
 
         docs = (db.collection('requests')
@@ -56,11 +56,18 @@ def generate_current_requests_report(db, status: str, file_mod_time: str, output
             address = doc.get("address").replace("-", "")
             total_balance = address_payment.get(address, {}).get("balance", 0)
 
+            # Get original message from logs[0].message
+            logs = doc.get("logs")
+            if logs is None:
+                logs = []
+            original_message = logs[0].get("message", "") if logs and len(logs) > 0 else ""
+
             f.write(f"<tr>"
                     f"<td>{doc.get('address')}</td>"
                     f"<td>{doc.get('name')}</td>"
                     f"<td><a href='tel:{doc.get('mobile')}'>{doc.get('mobile')}</a></td>"
                     f"<td>{doc.get('serviceType')}</td>"
+                    f"<td>{original_message}</td>"
                     f"<td>{created_at.year}-{created_at.month:02d}-{created_at.day:02d} "
                     f"{created_at.hour:02d}:{created_at.minute:02d}</td>"
                     f"<td>{last_updated.year}-{last_updated.month:02d}-{last_updated.day:02d} "

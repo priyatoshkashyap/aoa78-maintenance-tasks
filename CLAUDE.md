@@ -16,6 +16,7 @@ python main.py [options]
 **Install dependencies:**
 ```bash
 pip install -r requirements.txt
+or py -m pip install -r requirements.txt
 ```
 
 ## Command-Line Options
@@ -42,6 +43,7 @@ python main.py --cleanup-old-requests --cleanup-months 6
 
 # Generate all reports
 python main.py --generate-pending-approval --generate-in-progress --generate-monthly-stats --generate-quarterly-stats
+or py main.py --generate-pending-approval --generate-in-progress --generate-monthly-stats --generate-quarterly-stats
 
 # Combine sync, cleanup, and reports
 python main.py --sync-payments --cleanup-old-requests --generate-pending-approval
